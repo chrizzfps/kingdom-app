@@ -1,0 +1,59 @@
+# Dependencies
+node_modules/
+api/vendor/
+
+# Build output
+dist/
+dist-ssr/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.json.key
+*-firebase-adminsdk-*.json
+proposalskingdom-*.json
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor & OS
+.DS_Store
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.trae/
+
+# VSCode (keep extensions and settings)
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Claude internal
+.claude/
+
+# TypeScript error dumps
+tsc_errors*.txt
+tsc_final.txt
+
+# Large archives
+*.zip
+
+# SQLite databases
+*.sqlite
+*.sqlite3
+
+# API duplicates / deploy artifacts
+api/api/
+api/public.zip
+api/u462615684_*
+cors.json

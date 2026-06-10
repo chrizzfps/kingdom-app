@@ -1,0 +1,175 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // --- Helper Functions ---
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Fetch user role from 'users' collection
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && getUserRole() == 'admin';
+    }
+    
+    function isEmployee() {
+      return isAuthenticated() && (getUserRole() == 'employee' || getUserRole() == 'member');
+    }
+    
+    // Any authenticated team member (admin or employee)
+    function isMember() {
+      return isAuthenticated() && (getUserRole() == 'admin' || getUserRole() == 'employee' || getUserRole() == 'member');
+    }
+
+    // Data Validation Helpers
+    function isValidString(text) {
+      return text is string && text.size() > 0;
+    }
+    
+    function isValidNumber(num) {
+      return num is number;
+    }
+
+    function hasKeys(keys) {
+      return request.resource.data.keys().hasAll(keys);
+    }
+    
+    // --- Channels & Messages (Team Chat) ---
+    match /channels/{channelId} {
+      allow read, write: if isAuthenticated();
+      
+      match /messages/{messageId} {
+        allow read, write: if isAuthenticated();
+      }
+    }
+
+    // --- Proposals (Public & Internal) ---
+    
+    match /proposals/{proposalId} {
+      // Validation: Must have title and status
+      function isValidProposal() {
+         return hasKeys(['clientName', 'status', 'type']) &&
+                isValidString(request.resource.data.clientName) &&
+                (request.resource.data.status in ['draft', 'published', 'accepted', 'rejected']);
+      }
+
+      // Public Access: Published proposals
+      allow list: if resource.data.status == 'published';
+      allow get: if resource.data.status == 'published';
+      
+      // Internal Access: Team members can read/write
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAdmin();
+
+      // Modules Subcollection
+      match /modules/{moduleId} {
+        allow read: if isAuthenticated() || get(/databases/$(database)/documents/proposals/$(proposalId)).data.status == 'published';
+        allow write: if isAuthenticated();
+        
+        match /versions/{versionId} {
+            allow read, write: if isAuthenticated();
+        }
+      }
+    }
+
+    // --- CRM Core Collections ---
+    
+    match /clients/{clientId} {
+      function isValidClient() {
+        return hasKeys(['name', 'email']) && isValidString(request.resource.data.name);
+      }
+      allow read: if isAuthenticated();
+      allow create, update: if isMember() && isValidClient();
+      allow delete: if isAdmin();
+    }
+
+    match /projects/{projectId} {
+      function isValidProject() {
+        return hasKeys(['name', 'clientId']) && isValidString(request.resource.data.name);
+      }
+      allow read: if isAuthenticated();
+      allow create, update: if isMember() && isValidProject();
+      allow delete: if isAdmin();
+
+      // Brand Identity for SocialCenter
+      match /brandIdentity/default {
+        allow read: if isAuthenticated();
+        allow write: if isMember();
+      }
+
+      // Posts History for SocialCenter
+      match /posts/{postId} {
+        allow read: if isAuthenticated();
+        allow create, update: if isMember();
+        allow delete: if isMember();
+      }
+    }
+
+    match /tasks/{taskId} {
+      function isValidTask() {
+        return hasKeys(['title', 'projectId', 'status']);
+      }
+      allow read: if isAuthenticated();
+      allow create, update: if isMember() && isValidTask();
+      allow delete: if isMember();
+    }
+    
+    match /resources/{resourceId} {
+      allow read: if isAuthenticated();
+      allow write: if isMember();
+    }
+
+    match /invoices/{invoiceId} {
+      function isValidInvoice() {
+        return hasKeys(['clientId', 'number', 'total']);
+      }
+      allow read: if isAuthenticated();
+      allow create, update: if isMember() && isValidInvoice();
+      allow delete: if isAdmin();
+    }
+    
+    // --- Settings ---
+    
+    match /settings/{settingId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // --- Users ---
+    
+    match /users/{userId} {
+       allow read: if isAuthenticated();
+       allow create: if isAuthenticated(); // For initial signup flows
+       allow update: if isAdmin() || request.auth.uid == userId;
+       allow delete: if isAdmin();
+
+       // User subcollections (preferences, favorites, etc.)
+       match /{allSubcollections=**} {
+         allow read, write: if request.auth.uid == userId;
+       }
+
+       // SENSITIVE DATA: Only for Admin or Owner
+       match /sensitive/profile {
+           allow read, write: if isAdmin() || request.auth.uid == userId;
+       }
+    }
+
+    // --- User Payments (Strict Admin Only) ---
+    
+    match /user_payments/{paymentId} {
+        allow read, write: if isAdmin();
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

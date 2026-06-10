@@ -1,0 +1,9 @@
+<IfModule mod_headers.c>
+    # Permitir acceso desde cualquier origen (CORS para imágenes)
+    Header set Access-Control-Allow-Origin "*"
+</IfModule>
+
+# Desactivar protección de hotlink y permitir ver archivos
+Order Allow,Deny
+Allow from all
+Require all granted
